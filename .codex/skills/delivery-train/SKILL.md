@@ -16,8 +16,8 @@ A *workflow* engine (`delivery-train.js`) does the work; this *skill* defines th
 
 | The user says… | Do this |
 |---|---|
-| "run the train" / "ship the walwarden tickets" / "clear the backlog" | `Workflow({name:"walwarden-delivery-train"})` (or `delivery-train` with `args:{project:"walwarden"}`) — auto-discovers everything unblocked |
-| "run it for <other repo>" | If the repo is in `PROJECTS`, `args:{project:"<name>"}`. If not, **add a repo** (below) first, or pass an inline config |
+| "run the train" / "ship the walwarden tickets" / "clear the backlog" | `Workflow({name:"walwarden-delivery-train"})` (or `Workflow({name:"delivery-train", args:"walwarden"})`) — auto-discovers everything unblocked |
+| "run it for <other repo>" | If the repo is in `PROJECTS`, pass the name directly as `args:"<name>"` or use `args:{project:"<name>"}`. If not, **add a repo** (below) first, or pass an inline config |
 | "add <repo> to the train" | Add an entry to `PROJECTS` in `delivery-train.js`. Required: `repo`, `repoPath`. Optional: `worktreeDir`, `branchPrefix`, `coauthor`, `adrDir`, `archDoc`, `checks`, `excludeLabels`, `archLabel`, `designLabel`, `includeNote`, `guardrails` |
 | "just do tickets 264 and 330" | `args:{tickets:[264, {n:330, hint:"…"}]}` — pins the list, planner only orders/labels them |
 | "skip the PR triage" | `args:{triagePrs:false}` |

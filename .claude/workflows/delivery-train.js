@@ -2,7 +2,7 @@ export const meta = {
   name: 'delivery-train',
   description: 'Generic multi-agent delivery train for any repo: PR-triage → plan → architecture → UX → implement → adversarial review (every stage) → fix → auto-merge, sequentially across all unblocked tickets',
   whenToUse:
-    'Autonomously deliver a repo\'s unblocked GitHub tickets. Invoke: Workflow({name:"delivery-train", args:{project:"walwarden"}}) for a registered repo, or pass an inline project config. args:{tickets:[...]} pins a list; args:{triagePrs:false} skips PR triage.',
+    'Autonomously deliver a repo\'s unblocked GitHub tickets. Invoke: Workflow({name:"delivery-train", args:"walwarden"}) or args:{project:"walwarden"} for a registered repo, or pass an inline project config. args:{tickets:[...]} pins a list; args:{triagePrs:false} skips PR triage.',
   phases: [{ title: 'PR Triage' }, { title: 'Plan' }, { title: 'Deliver' }],
 }
 
@@ -26,8 +26,13 @@ const PROJECTS = {
   },
 }
 
-// ── Resolve project config (registry name, or inline object, default walwarden) ─
-const RAW = args && !Array.isArray(args) ? args : { tickets: args }
+// ── Resolve project config (registry name, inline object, or default walwarden) ─
+const RAW =
+  typeof args === 'string'
+    ? { project: args }
+    : args && !Array.isArray(args)
+      ? args
+      : { tickets: args }
 const sel = RAW.project
 let P
 if (typeof sel === 'string') {

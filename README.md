@@ -27,13 +27,19 @@ The installer copies Claude workflows into `~/.claude/workflows`, copies the Cla
 ## Claude Usage
 
 ```js
-Workflow({ name: "delivery-train", args: { project: "walwarden" } })
+Workflow({ name: "delivery-train", args: "walwarden" })
 ```
 
 or:
 
 ```js
 Workflow({ name: "walwarden-delivery-train" })
+```
+
+The object form still works when you need more options:
+
+```js
+Workflow({ name: "delivery-train", args: { project: "walwarden" } })
 ```
 
 Pinned tickets:
