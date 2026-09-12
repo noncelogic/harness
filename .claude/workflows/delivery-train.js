@@ -9,6 +9,23 @@ export const meta = {
 // ── Per-repo registry. Add a repo here (or pass an inline `project` object). ────
 // Required: repo, repoPath. Everything else has a sane default below.
 const PROJECTS = {
+  cortexplane: {
+    repo: 'noncelogic/cortexplane',
+    repoPath: `${process.env.HOME || '/home/josgraha'}/projects/noncelogic/cortexplane`,
+    worktreeDir: `${process.env.HOME || '/home/josgraha'}/ws`,
+    branchPrefix: 'cp',
+    coauthor: 'Claude <noreply@anthropic.com>',
+    attribution: '🤖 Generated with Claude Code',
+    adrDir: 'docs/strategy/',
+    archDoc: 'docs/strategy/runtime-design-partner-motion-contract.md',
+    checks: 'For the initial document-only Runtime framing ticket: `git diff --check`, `test -s docs/strategy/runtime-design-partner-motion-contract.md`, and a source/acceptance-criterion read-through against GitHub issue #486. For any later code ticket, discover and run the repository\'s relevant typecheck, test, lint, and acceptance commands before every commit.',
+    excludeLabels: ['epic', 'blocked', 'needs-operator', 'strategy:reassessment', 'rail:builder', 'rail:builder-gated'],
+    requiredLabels: ['program:cortexplane', 'rail:runtime'],
+    archLabel: 'needs-architecture',
+    designLabel: 'needs-design',
+    includeNote: `This is one Cortexplane product with a Runtime-first sequence, not separate Runtime and Builder projects. Until committed Runtime-exit evidence exists, include only issues carrying both \`program:cortexplane\` and \`rail:runtime\`; never touch the historical \`strategy:reassessment\` backlog. The first claimable ticket is #486. Its sole outcome is the source-backed design-partner motion contract at \`docs/strategy/runtime-design-partner-motion-contract.md\`; do not revive the legacy Storybook/dashboard/prototype work. Product authority is \`${process.env.HOME || '/home/josgraha'}/vault/wiki/hermes-poisson/projects/Cortexplane/\`, especially \`VISION.md\`, \`ROADMAP.md\`, \`BUILDER-RAIL.md\`, and \`META-HARNESS.md\`; Meta-Harness execution context is \`${process.env.HOME || '/home/josgraha'}/projects/meta-harness/projects/cortexplane/\`.`,
+    guardrails: '- RUNTIME EVIDENCE FIRST: do not build generic assistant surfaces, a dashboard, a landing page, an integration catalogue, or a Builder/software-factory abstraction before a design-partner motion has evidence of an admitted motion, authority boundary, durable receipt, observed outcome, correction route, and operator-readable report.\n- RAIL INTEGRITY: Builder work is unavailable until the Meta-Harness Runtime-exit gate opens it. Do not create a parallel backlog or treat the Builder as a separate product.\n- DECISION INTEGRITY: retain sources, distinguish fact from inference and assumption, and state a falsifier for every commercial claim. A document can frame a motion; it cannot assert customer validation that did not occur.',
+  },
   walwarden: {
     repo: 'noncelogic/walwarden',
     repoPath: '/home/cortex/projects/walwarden',
@@ -54,6 +71,7 @@ const C = {
   archDoc: '',
   checks: 'the repo\'s typecheck and test commands (discover them from package.json / CI config)',
   excludeLabels: ['epic'],
+  requiredLabels: [],
   archLabel: 'needs-architectural-review',
   designLabel: 'needs-design',
   includeNote: '',
@@ -115,7 +133,7 @@ let plan
 if (PINNED.length) {
   log(`Using pinned ticket list (${PINNED.length})`)
   const planned = await agent(
-    `You are the PLANNER for ${C.repo}. The operator pinned these tickets: ${PINNED.map((t) => t.n).join(', ')}.\n${RULES}\nFor each, gh issue view <n> --repo ${C.repo} --json number,title,labels,body. Set needsArch (label "${C.archLabel}") and needsDesign (label "${C.designLabel}"). Order by dependency (read bodies/epics for "depends on"/"blocked by"/sequence hints). Return {plan:[{n,title,needsArch,needsDesign,note}], skipped:[]}. Keep all pinned tickets; note any that look blocked.`,
+    `You are the PLANNER for ${C.repo}. The operator pinned these tickets: ${PINNED.map((t) => t.n).join(', ')}.\n${RULES}\nFor each, gh issue view <n> --repo ${C.repo} --json number,title,labels,body. A pin narrows the candidate set; it does not bypass admission. EXCLUDE a pinned ticket carrying any of these labels: ${C.excludeLabels.map((l) => '"' + l + '"').join(', ')}. ${C.requiredLabels.length ? `REQUIRE all of these labels: ${C.requiredLabels.map((l) => '"' + l + '"').join(', ')}; skip any ticket missing one.` : ''} Set needsArch (label "${C.archLabel}") and needsDesign (label "${C.designLabel}"). Order eligible tickets by dependency (read bodies/epics for "depends on"/"blocked by"/sequence hints). Return {plan:[{n,title,needsArch,needsDesign,note}], skipped:["#<n> — reason", ...]}.`,
     { label: 'planner', phase: 'Plan', schema: PLAN },
   )
   plan = planned && planned.plan
@@ -123,7 +141,7 @@ if (PINNED.length) {
 } else {
   log(`Auto-discovering unblocked tickets on ${C.repo}`)
   const planned = await agent(
-    `You are the PLANNER for ${C.repo}.\n${RULES}\nDiscover the work: gh issue list --repo ${C.repo} --state open --limit 100 --json number,title,labels,body.\nINCLUDE every open issue EXCEPT those that are blocked or not actionable autonomously:\n- EXCLUDE these labels: ${C.excludeLabels.map((l) => '"' + l + '"').join(', ')} (umbrella trackers / require human credentials or decisions).\n- EXCLUDE any issue whose body clearly marks it blocked by another OPEN issue, or is a pure operator open-question.\n${C.includeNote ? C.includeNote + '\n' : ''}For each included ticket set needsArch (label "${C.archLabel}") and needsDesign (label "${C.designLabel}").\nORDER by dependency so prerequisites come first: read epic/ticket bodies for "depends on"/"blocked by"/numbered sequences (e.g. "redesign 1/2/3/4" must run in order; wireframes before the page that implements them). Within a tier, prefer small→large.\nReturn {plan:[{n,title,needsArch,needsDesign,note}], skipped:["#<n> — reason", ...]}. note = one line on dependencies/risk.`,
+    `You are the PLANNER for ${C.repo}.\n${RULES}\nDiscover the work: gh issue list --repo ${C.repo} --state open --limit 100 --json number,title,labels,body.\nINCLUDE every open issue EXCEPT those that are blocked or not actionable autonomously:\n- EXCLUDE these labels: ${C.excludeLabels.map((l) => '"' + l + '"').join(', ')} (umbrella trackers / require human credentials or decisions).\n${C.requiredLabels.length ? `- REQUIRE all of these labels: ${C.requiredLabels.map((l) => '"' + l + '"').join(', ')}.\n` : ''}- EXCLUDE any issue whose body clearly marks it blocked by another OPEN issue, or is a pure operator open-question.\n${C.includeNote ? C.includeNote + '\n' : ''}For each included ticket set needsArch (label "${C.archLabel}") and needsDesign (label "${C.designLabel}").\nORDER by dependency so prerequisites come first: read epic/ticket bodies for "depends on"/"blocked by"/numbered sequences (e.g. "redesign 1/2/3/4" must run in order; wireframes before the page that implements them). Within a tier, prefer small→large.\nReturn {plan:[{n,title,needsArch,needsDesign,note}], skipped:["#<n> — reason", ...]}. note = one line on dependencies/risk.`,
     { label: 'planner', phase: 'Plan', schema: PLAN },
   )
   plan = planned && planned.plan
