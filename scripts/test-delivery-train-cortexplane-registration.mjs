@@ -21,6 +21,18 @@ assert.match(workflow, /before implementation/)
 assert.match(workflow, /JSON\.parse\(admission\.output\)/)
 assert.match(workflow, /dispatch\.item !== `cortexplane#\$\{ticket\.n\}`/)
 assert.match(workflow, /planningCandidates\.some\(\(candidate\) => candidate\.n === ticket\.n\)/)
+assert.match(workflow, /\(RAW\.tickets \|\| \[\]\)\.map\(normalizePinnedTicket\)/)
+
+const normalizerSource = workflow.match(/function normalizePinnedTicket[\s\S]*?\n}\n\nconst PINNED/)
+assert.ok(normalizerSource, 'ticket normalizer must be present')
+const normalizePinnedTicket = new Function(
+  `${normalizerSource[0].replace(/\n\nconst PINNED$/, '')}\nreturn normalizePinnedTicket`,
+)()
+assert.deepEqual(normalizePinnedTicket({ n: 486, hint: 'safe' }), { n: 486, hint: 'safe' })
+assert.throws(
+  () => normalizePinnedTicket({ n: '486; touch /tmp/cortexplane-injection' }),
+  /positive safe integer/,
+)
 
 const discovered = workflow.indexOf('const discovered = await agent(')
 const autoAdmission = workflow.indexOf("await admitCortexplaneTicket(ticket, 'before planning')", discovered)

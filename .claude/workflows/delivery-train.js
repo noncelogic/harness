@@ -87,7 +87,15 @@ const C = {
 }
 
 const TRIAGE_PRS = RAW.triagePrs !== false
-const PINNED = (RAW.tickets || []).map((t) => (typeof t === 'number' ? { n: t } : t)).filter((t) => t && t.n)
+function normalizePinnedTicket(rawTicket) {
+  const n = typeof rawTicket === 'number' ? rawTicket : rawTicket && rawTicket.n
+  if (!Number.isSafeInteger(n) || n < 1) {
+    throw new Error('ticket n must be a positive safe integer')
+  }
+  return typeof rawTicket === 'number' ? { n } : { ...rawTicket, n }
+}
+
+const PINNED = (RAW.tickets || []).map(normalizePinnedTicket)
 const WT = `${C.worktreeDir}/${C.branchPrefix}-<n>` // documented worktree path for prompts
 
 const RULES = `
@@ -129,6 +137,10 @@ const cortexplanePlannerAdmission = CORTEXPLANE_ADMISSION_REQUIRED
 
 async function admitCortexplaneTicket(ticket, boundary) {
   if (!CORTEXPLANE_ADMISSION_REQUIRED) return true
+  if (!ticket || !Number.isSafeInteger(ticket.n) || ticket.n < 1) {
+    log('refused unsafe Cortexplane ticket number before admission')
+    return false
+  }
   const expected = `cortexplane#${ticket.n}`
   const admission = await agent(
     `You are the Cortexplane admission gate for #${ticket.n}, ${boundary}. Do not plan or implement this ticket unless admission succeeds. Run these commands exactly, in order:\n    test -d ${C.metaProjectPath}\n    ${C.metaProjectPath}/scripts/validate\n    ${C.metaProjectPath}/scripts/dispatch cortexplane#${ticket.n} --json\nIf any command fails, the path is absent, the output is absent or not valid JSON, or JSON item is not exactly ${expected}, refuse the ticket. Only after all checks pass, return {output}, where output is the complete raw dispatch JSON.`,
