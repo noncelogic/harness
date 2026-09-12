@@ -6,7 +6,8 @@ const workflow = await readFile(
   'utf8',
 )
 
-assert.match(workflow, /repoPath: `\$\{process\.env\.HOME \|\| '\/home\/josgraha'\}\/projects\/noncelogic\/cortexplane`/)
+assert.match(workflow, /repoPath: '\/home\/josgraha\/projects\/noncelogic\/cortexplane'/)
+assert.doesNotMatch(workflow, /process\.env\.HOME/)
 assert.match(workflow, /requiredLabels: \['program:cortexplane', 'rail:runtime'\]/)
 assert.match(workflow, /A pin narrows the candidate set; it does not bypass admission\./)
 assert.match(workflow, /REQUIRE all of these labels: \$\{C\.requiredLabels/)
