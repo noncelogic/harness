@@ -113,7 +113,7 @@ ${C.guardrails ? C.guardrails + '\n' : ''}- Minimal surgical diffs. No speculati
 const TRIAGE = { type: 'object', properties: { pr: { type: 'number' }, disposition: { type: 'string', enum: ['rebased_finished', 'closed_superseded', 'left_open'] }, details: { type: 'string' } }, required: ['pr', 'disposition', 'details'] }
 const PLAN = { type: 'object', properties: { plan: { type: 'array', items: { type: 'object', properties: { n: { type: 'number' }, title: { type: 'string' }, needsArch: { type: 'boolean' }, needsDesign: { type: 'boolean' }, note: { type: 'string' } }, required: ['n', 'title', 'needsArch', 'needsDesign'] } }, skipped: { type: 'array', items: { type: 'string' } } }, required: ['plan'] }
 const CANDIDATES = { type: 'object', properties: { candidates: { type: 'array', items: { type: 'object', properties: { n: { type: 'number' }, title: { type: 'string' } }, required: ['n', 'title'] } }, skipped: { type: 'array', items: { type: 'string' } } }, required: ['candidates'] }
-const ADMISSION = { type: 'object', properties: { output: { type: 'string' } }, required: ['output'] }
+const ADMISSION = { type: 'object', properties: { output: { type: 'string' }, mission: { type: 'string' } }, required: ['output', 'mission'] }
 const ARTIFACT = { type: 'object', properties: { done: { type: 'boolean' }, summary: { type: 'string' }, location: { type: 'string' }, blockers: { type: 'string' } }, required: ['done', 'summary'] }
 const REVIEW = { type: 'object', properties: { verdict: { type: 'string', enum: ['approve', 'request_changes'] }, issues: { type: 'array', items: { type: 'string' } } }, required: ['verdict', 'issues'] }
 const IMPL = { type: 'object', properties: { pr: { type: 'number' }, branch: { type: 'string' }, summary: { type: 'string' }, blockers: { type: 'string' } }, required: ['pr', 'branch', 'summary'] }
@@ -135,6 +135,9 @@ const cortexplanePlannerAdmission = CORTEXPLANE_ADMISSION_REQUIRED
   ? `Before considering each candidate eligible, verify the canonical Meta-Harness project exists and run:\n    test -d ${C.metaProjectPath}\n    ${C.metaProjectPath}/scripts/validate\n    ${C.metaProjectPath}/scripts/dispatch cortexplane#<n> --json\nParse the dispatch JSON. Include a candidate only when its item is exactly cortexplane#<n>; otherwise refuse it and record the failure in skipped.\n`
   : ''
 
+const CORTEXPLANE_TASK_ACTIONS = new Map()
+const CORTEXPLANE_MISSIONS = new Map()
+
 async function admitCortexplaneTicket(ticket, boundary) {
   if (!CORTEXPLANE_ADMISSION_REQUIRED) return true
   if (!ticket || !Number.isSafeInteger(ticket.n) || ticket.n < 1) {
@@ -143,7 +146,7 @@ async function admitCortexplaneTicket(ticket, boundary) {
   }
   const expected = `cortexplane#${ticket.n}`
   const admission = await agent(
-    `You are the Cortexplane admission gate for #${ticket.n}, ${boundary}. Do not plan or implement this ticket unless admission succeeds. Run these commands exactly, in order:\n    test -d ${C.metaProjectPath}\n    ${C.metaProjectPath}/scripts/validate\n    ${C.metaProjectPath}/scripts/dispatch cortexplane#${ticket.n} --json\nIf any command fails, the path is absent, the output is absent or not valid JSON, or JSON item is not exactly ${expected}, refuse the ticket. Only after all checks pass, return {output}, where output is the complete raw dispatch JSON.`,
+    `You are the Cortexplane admission gate for #${ticket.n}, ${boundary}. Do not plan or implement this ticket unless admission succeeds. Run these commands exactly, in order:\n    git -C ${C.metaProjectPath} fetch origin --prune\n    git -C ${C.metaProjectPath} pull --ff-only\n    test -d ${C.metaProjectPath}\n    ${C.metaProjectPath}/scripts/validate\n    ${C.metaProjectPath}/scripts/dispatch cortexplane#${ticket.n} --json\n    ${C.metaProjectPath}/scripts/dispatch cortexplane#${ticket.n} --role implementer\nIf any command fails, the path is absent, JSON is invalid, the JSON item is not exactly ${expected}, or the rendered packet is absent, refuse the ticket. Only after all checks pass, return {output,mission}, where output is the complete raw dispatch JSON and mission is the complete rendered dispatch packet with no summary or edits.`,
     { label: `admission:${boundary}:#${ticket.n}`, phase: boundary === 'before planning' ? 'Plan' : 'Deliver', schema: ADMISSION },
   )
   let dispatch
@@ -156,7 +159,24 @@ async function admitCortexplaneTicket(ticket, boundary) {
     log(`#${ticket.n}: refused by Cortexplane admission ${boundary}`)
     return false
   }
+  if (!['spike', 'implement', 'verify', 'reframe'].includes(dispatch.task_action)) {
+    log(`#${ticket.n}: refused because dispatch did not expose a valid contracted task action`)
+    return false
+  }
+  if (!admission.mission || !admission.mission.includes('## Controlling mission contract')) {
+    log(`#${ticket.n}: refused because dispatch did not return a controlling mission packet`)
+    return false
+  }
+  CORTEXPLANE_TASK_ACTIONS.set(ticket.n, dispatch.task_action)
+  CORTEXPLANE_MISSIONS.set(ticket.n, admission.mission)
   return true
+}
+
+function cortexplaneMission(ticket) {
+  if (!CORTEXPLANE_ADMISSION_REQUIRED) return ''
+  const mission = CORTEXPLANE_MISSIONS.get(ticket.n)
+  if (!mission) return 'No admitted Cortexplane mission packet is available; do not continue.'
+  return `\n## Controlling Cortexplane mission\n\nThe following rendered dispatch packet is the whole task authority. Do not read or reinterpret raw GitHub issue prose, historical Cortexplane documents, role manuals, or workflow instructions to widen it.\n\n${mission}\n`
 }
 
 const results = []
@@ -252,14 +272,32 @@ for (const t of plan) {
     continue
   }
 
+  const taskAction = CORTEXPLANE_TASK_ACTIONS.get(t.n)
+  if (CORTEXPLANE_ADMISSION_REQUIRED && taskAction === 'reframe') {
+    const execution = await agent(
+      `You are the Cortexplane Runtime execution worker for ticket #${t.n}.\n${RULES}\n${cortexplaneMission(t)}\nDo only the contracted reframe. Do not create a worktree, PR, ADR, implementation, framework survey, or follow-on ticket. Perform the exact required deliverable, including the issue comment and closure if required by the packet. Return {done,summary,location,blockers}; done is true only after the required external state exists.`,
+      { label: `runtime-reframe:#${t.n}`, phase: 'Deliver', schema: ARTIFACT },
+    )
+    if (!execution || !execution.done) {
+      results.push({ ticket: t.n, status: execution ? (execution.blockers || 'reframe incomplete') : 'reframe worker died' })
+      continue
+    }
+    const verification = await agent(
+      `You are the independent verifier for Cortexplane ticket #${t.n}.\n${cortexplaneMission(t)}\nRead the ticket only to verify its external state. Confirm the exact required deliverable exists and the ticket has the state required by the mission packet. Do not accept a self-report, create work, or broaden scope. Return {done,summary,location,blockers}.`,
+      { label: `runtime-reframe-verify:#${t.n}`, phase: 'Deliver', schema: ARTIFACT },
+    )
+    results.push({ ticket: t.n, status: verification && verification.done ? 'reframe verified' : (verification ? (verification.blockers || 'reframe verification failed') : 'reframe verifier died'), summary: (execution.summary || '').slice(0, 140) })
+    continue
+  }
+
   if (t.needsArch) {
     const arch = await agent(
-      `You are the ARCHITECT for ${C.repo} ticket #${t.n}.\n${RULES}\ngh issue view ${t.n} --repo ${C.repo} (read every requirement). ${hint}Produce the architecture decision this ticket needs: chosen approach, boundaries, data flow, state machines, trade-offs, open questions. Write it as an ADR under ${C.adrDir} (follow existing ADR format) on the ticket's worktree branch, and post a summary as a ticket comment. Return {done,summary,location,blockers}.`,
+      `You are the ARCHITECT for ${C.repo} ticket #${t.n}.\n${RULES}\n${cortexplaneMission(t)}\n${CORTEXPLANE_ADMISSION_REQUIRED ? 'Use the controlling mission packet above; do not read raw GitHub issue prose as a competing specification.' : `gh issue view ${t.n} --repo ${C.repo} (read every requirement).`} ${hint}Produce the architecture decision this ticket needs: chosen approach, boundaries, data flow, state machines, trade-offs, open questions. Write it as an ADR under ${C.adrDir} (follow existing ADR format) on the ticket's worktree branch, and post a summary as a ticket comment. Return {done,summary,location,blockers}.`,
       { label: `arch:#${t.n}`, phase: 'Deliver', schema: ARTIFACT },
     )
     if (arch) {
       const r = await reviewGate(t, 'architecture',
-        `You are an ADVERSARIAL ARCHITECTURE REVIEWER for ${C.repo} ticket #${t.n}. ${RULES}\nReview the ADR (${arch.location || C.adrDir}) and ticket-comment summary. Check: does it satisfy #${t.n}'s intent; are boundaries/SLAs/state-machines sound and consistent with the repo's architecture docs; are open questions surfaced not hidden; do any guardrails above apply. Return {verdict,issues}.`,
+        `You are an ADVERSARIAL ARCHITECTURE REVIEWER for ${C.repo} ticket #${t.n}. ${RULES}\n${cortexplaneMission(t)}\nReview the ADR (${arch.location || C.adrDir}) and ticket-comment summary against the controlling mission packet. Check: are boundaries/SLAs/state-machines sound; are open questions surfaced not hidden; do any guardrails above apply. Return {verdict,issues}.`,
         `You are the ARCHITECT revising the ADR for #${t.n}. ${RULES} Address the issues, update the ADR + ticket comment.`,
         `arch:#${t.n}`)
       log(`#${t.n} arch: ${r ? r.verdict : 'reviewer died'}`)
@@ -268,12 +306,12 @@ for (const t of plan) {
 
   if (t.needsDesign) {
     const ux = await agent(
-      `You are the UX / PRODUCT advocate for ${C.repo} ticket #${t.n}.\n${RULES}\ngh issue view ${t.n} --repo ${C.repo}. ${hint}Produce the design artifact this ticket needs (user flows, wireframe/component spec, states incl. empty/error/loading, copy). Honor the existing design system. Post the design artifact as a ticket comment (and commit any spec file where the repo keeps design specs) so the implementer has an unambiguous target. Name the job-to-be-done and the success state. Return {done,summary,location,blockers}.`,
+      `You are the UX / PRODUCT advocate for ${C.repo} ticket #${t.n}.\n${RULES}\n${cortexplaneMission(t)}\n${CORTEXPLANE_ADMISSION_REQUIRED ? 'Use the controlling mission packet above; do not read raw GitHub issue prose as a competing specification.' : `gh issue view ${t.n} --repo ${C.repo}.`} ${hint}Produce the design artifact this ticket needs (user flows, wireframe/component spec, states incl. empty/error/loading, copy). Honor the existing design system. Post the design artifact as a ticket comment (and commit any spec file where the repo keeps design specs) so the implementer has an unambiguous target. Name the job-to-be-done and the success state. Return {done,summary,location,blockers}.`,
       { label: `ux:#${t.n}`, phase: 'Deliver', schema: ARTIFACT },
     )
     if (ux) {
       const r = await reviewGate(t, 'design',
-        `You are an ADVERSARIAL DESIGN REVIEWER for ${C.repo} ticket #${t.n}. ${RULES}\nReview the design artifact posted on #${t.n}. Check: serves the real user job; all states covered (empty/loading/error); consistent with the existing design system; copy respects any guardrails above; implementable without guesswork. Return {verdict,issues}.`,
+        `You are an ADVERSARIAL DESIGN REVIEWER for ${C.repo} ticket #${t.n}. ${RULES}\n${cortexplaneMission(t)}\nReview the design artifact posted on #${t.n} against the controlling mission packet. Check: serves the real user job; all states covered (empty/loading/error); consistent with the existing design system; copy respects any guardrails above; implementable without guesswork. Return {verdict,issues}.`,
         `You are the UX / PRODUCT advocate revising the design for #${t.n}. ${RULES} Address the issues, update the artifact.`,
         `ux:#${t.n}`)
       log(`#${t.n} ux: ${r ? r.verdict : 'reviewer died'}`)
@@ -281,14 +319,14 @@ for (const t of plan) {
   }
 
   const impl = await agent(
-    `You are the IMPLEMENTER for ${C.repo} ticket #${t.n}.\n${RULES}\ngh issue view ${t.n} --repo ${C.repo} (read EVERY acceptance criterion). ${hint}If an ADR or design artifact was posted to this ticket, implement to it exactly. Explore the repo for where this belongs. Implement fully in the ticket's worktree on branch ${C.branchPrefix}-${t.n}-<slug>. typecheck + tests + relevant checks green. Push and open a PR. Return {pr,branch,summary,blockers} (blockers = anything incomplete + why; empty if none).`,
+    `You are the IMPLEMENTER for ${C.repo} ticket #${t.n}.\n${RULES}\n${cortexplaneMission(t)}\n${CORTEXPLANE_ADMISSION_REQUIRED ? 'Use the controlling mission packet above; do not read raw GitHub issue prose as a competing specification.' : `gh issue view ${t.n} --repo ${C.repo} (read EVERY acceptance criterion).`} ${hint}If an ADR or design artifact was posted to this ticket, implement to it exactly. Explore the repo for where this belongs. Implement fully in the ticket's worktree on branch ${C.branchPrefix}-${t.n}-<slug>. typecheck + tests + relevant checks green. Push and open a PR. Return {pr,branch,summary,blockers} (blockers = anything incomplete + why; empty if none).`,
     { label: `impl:#${t.n}`, phase: 'Deliver', schema: IMPL },
   )
   if (!impl) { results.push({ ticket: t.n, status: 'implementer died' }); continue }
   log(`#${t.n}: PR #${impl.pr}${impl.blockers ? ' (blockers: ' + impl.blockers.slice(0, 80) + ')' : ''}`)
 
   const codeReview = await reviewGate(t, 'code',
-    `You are an ADVERSARIAL CODE REVIEWER for PR #${impl.pr} on ${C.repo} (ticket #${t.n}).\n${RULES}\nReview via gh pr view/diff and read changed files in context (fetch the branch). Check: (1) EVERY acceptance criterion of #${t.n}; (2) conformance to any ADR/design posted on the ticket; (3) any guardrails above — zero tolerance; (4) correctness/conventions/test coverage; (5) NO fabricated artifacts presented as real; (6) CRITICAL: if the change adds any user-facing "run it / verify it yourself" command or published artifact, ACTUALLY EXECUTE it end-to-end from a clean directory (a fresh /tmp dir, no repo checkout). Post a real PR review (gh pr review --approve | --request-changes). Return {verdict,issues}.`,
+    `You are an ADVERSARIAL CODE REVIEWER for PR #${impl.pr} on ${C.repo} (ticket #${t.n}).\n${RULES}\n${cortexplaneMission(t)}\nReview via gh pr view/diff and read changed files in context (fetch the branch). Check: (1) EVERY acceptance observation in the controlling mission packet; (2) conformance to any ADR/design posted on the ticket; (3) any guardrails above — zero tolerance; (4) correctness/conventions/test coverage; (5) NO fabricated artifacts presented as real; (6) CRITICAL: if the change adds any user-facing "run it / verify it yourself" command or published artifact, ACTUALLY EXECUTE it end-to-end from a clean directory (a fresh /tmp dir, no repo checkout). Post a real PR review (gh pr review --approve | --request-changes). Return {verdict,issues}.`,
     `You are the FIXER for PR #${impl.pr} on ${C.repo} (branch ${impl.branch}, ticket #${t.n}). ${RULES} Address every issue in the ticket's worktree, push to the same branch, typecheck+tests green, reply to review comments via gh.`,
     `code:#${t.n}`)
 
