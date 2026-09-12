@@ -12,6 +12,8 @@ assert.match(workflow, /P\.metaProjectPath !== CANONICAL_CORTEXPLANE_META_PROJEC
 assert.doesNotMatch(workflow, /projects\/cortexplane\//)
 assert.doesNotMatch(workflow, /process\.env/)
 assert.match(workflow, /requiredLabels: \['program:cortexplane', 'rail:runtime'\]/)
+assert.doesNotMatch(workflow, /The first claimable ticket is #486\./)
+assert.match(workflow, /No Cortexplane ticket is claimable until canonical Meta-Harness admission succeeds\./)
 assert.match(workflow, /A pin narrows the candidate set; it does not bypass admission\./)
 assert.match(workflow, /REQUIRE all of these labels: \$\{C\.requiredLabels/)
 assert.match(workflow, /\$\{C\.metaProjectPath\}\/scripts\/validate/)
