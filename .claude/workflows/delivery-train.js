@@ -11,8 +11,10 @@ export const meta = {
 const PROJECTS = {
   cortexplane: {
     repo: 'noncelogic/cortexplane',
-    repoPath: `${process.env.HOME || '/home/josgraha'}/projects/noncelogic/cortexplane`,
-    worktreeDir: `${process.env.HOME || '/home/josgraha'}/ws`,
+    // Claude's workflow sandbox does not expose Node's `process`, and this registered
+    // delivery runner is intentionally installed on lnx-orion as josgraha.
+    repoPath: '/home/josgraha/projects/noncelogic/cortexplane',
+    worktreeDir: '/home/josgraha/ws',
     branchPrefix: 'cp',
     coauthor: 'Claude <noreply@anthropic.com>',
     attribution: '🤖 Generated with Claude Code',
@@ -23,7 +25,7 @@ const PROJECTS = {
     requiredLabels: ['program:cortexplane', 'rail:runtime'],
     archLabel: 'needs-architecture',
     designLabel: 'needs-design',
-    includeNote: `This is one Cortexplane product with a Runtime-first sequence, not separate Runtime and Builder projects. Until committed Runtime-exit evidence exists, include only issues carrying both \`program:cortexplane\` and \`rail:runtime\`; never touch the historical \`strategy:reassessment\` backlog. The first claimable ticket is #486. Its sole outcome is the source-backed design-partner motion contract at \`docs/strategy/runtime-design-partner-motion-contract.md\`; do not revive the legacy Storybook/dashboard/prototype work. Product authority is \`${process.env.HOME || '/home/josgraha'}/vault/wiki/hermes-poisson/projects/Cortexplane/\`, especially \`VISION.md\`, \`ROADMAP.md\`, \`BUILDER-RAIL.md\`, and \`META-HARNESS.md\`; Meta-Harness execution context is \`${process.env.HOME || '/home/josgraha'}/projects/meta-harness/projects/cortexplane/\`.`,
+    includeNote: 'This is one Cortexplane product with a Runtime-first sequence, not separate Runtime and Builder projects. Until committed Runtime-exit evidence exists, include only issues carrying both `program:cortexplane` and `rail:runtime`; never touch the historical `strategy:reassessment` backlog. The first claimable ticket is #486. Its sole outcome is the source-backed design-partner motion contract at `docs/strategy/runtime-design-partner-motion-contract.md`; do not revive the legacy Storybook/dashboard/prototype work. Product authority is `/home/josgraha/vault/wiki/hermes-poisson/projects/Cortexplane/`, especially `VISION.md`, `ROADMAP.md`, `BUILDER-RAIL.md`, and `META-HARNESS.md`; Meta-Harness execution context is `/home/josgraha/projects/meta-harness/projects/cortexplane/`.',
     guardrails: '- RUNTIME EVIDENCE FIRST: do not build generic assistant surfaces, a dashboard, a landing page, an integration catalogue, or a Builder/software-factory abstraction before a design-partner motion has evidence of an admitted motion, authority boundary, durable receipt, observed outcome, correction route, and operator-readable report.\n- RAIL INTEGRITY: Builder work is unavailable until the Meta-Harness Runtime-exit gate opens it. Do not create a parallel backlog or treat the Builder as a separate product.\n- DECISION INTEGRITY: retain sources, distinguish fact from inference and assumption, and state a falsifier for every commercial claim. A document can frame a motion; it cannot assert customer validation that did not occur.',
   },
   walwarden: {
