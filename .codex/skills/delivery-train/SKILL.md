@@ -42,6 +42,10 @@ A *workflow* engine (`delivery-train.js`) does the work; this *skill* defines th
 - **Never** work in the operator's primary checkout — each ticket gets its own worktree off fresh `origin/main`.
 - typecheck + tests + relevant `:check`/lint green before every commit.
 - Per-repo `guardrails` (e.g. walwarden's claim-safety copy rule) are enforced by every reviewer. They are *copy* guardrails — they never block building a feature.
+- **Cortexplane Runtime contracts:** admission proves a ticket is eligible; the rendered Meta-Harness
+  dispatch packet is the worker's complete task authority. Refresh Meta-Harness first, preserve the
+  packet unchanged, and never let raw issue prose, historical documents, or generic workflow roles
+  widen it. A `reframe` contract uses its bounded execution-and-verification path, not the PR train.
 
 ## In Codex
 
